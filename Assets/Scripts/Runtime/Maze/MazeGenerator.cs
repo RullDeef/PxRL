@@ -11,11 +11,22 @@ public class MazeGenerator : MonoBehaviour
     // переменные для доступа к объектам на сцене
     private Grid grid;
 
+    // сам мейз
+    public Maze maze;
+
     public void Generate()
     {
         if (GatherRequiredComponents())
         {
             SetupTilemaps();
+
+            Maze maze = new Maze();
+
+            MazeRoom room = LoadRoomInfo("Start Room");
+            PutRoom("Start Room", 0, 0);
+
+            maze.rooms.Add(room);
+
             Debug.Log("Maze generated!");
         }
     }
@@ -42,34 +53,66 @@ public class MazeGenerator : MonoBehaviour
     {
         // добавить 3 слоя на карту
         InitLayers(3);
+    }
 
-        // тестовая генерация пустот
+    private MazeRoom LoadRoomInfo(string roomName)
+    {
+        string roomPath = $"Mazes/Rooms/{roomName}";
+        GameObject roomPrefab = Resources.Load<GameObject>(roomPath);
+
+        if (roomPrefab == null)
         {
-            Tilemap background = layers[0];
-            bool[,] rooms = GenerateRooms();
-
-            for (int x = 0; x < rooms.GetLength(0); x++)
-                for (int y = 0; y < rooms.GetLength(1); y++)
-                    if (rooms[x, y] == false)
-                        background.SetTile(new Vector3Int(x, y, 0), genParams.tiles.wall);
+            Debug.LogAssertion($"Комната '{roomName}' не найдена.");
+            return null;
         }
 
-        PutChunk("Chunk 1", 0, 0);
+        Grid roomGrid = roomPrefab.GetComponent<Grid>();
+        if (roomGrid == null)
+        {
+            Debug.LogAssertion($"Комната '{roomName}' имеет неправильную структуру.");
+            return null;
+        }
+
+        MazeRoom room = new MazeRoom();
+        room.bounds = new BoundsInt(0, 0, 0, 0, 0, 0);
+
+        foreach (Tilemap roomLayer in roomGrid.GetComponentsInChildren<Tilemap>())
+        {
+            BoundsInt bounds = roomLayer.cellBounds;
+            room.bounds.xMin = Mathf.Min(room.bounds.xMin, bounds.xMin);
+            room.bounds.xMax = Mathf.Max(room.bounds.xMax, bounds.xMax);
+            room.bounds.yMin = Mathf.Min(room.bounds.yMin, bounds.yMin);
+            room.bounds.yMax = Mathf.Max(room.bounds.yMax, bounds.yMax);
+            room.bounds.zMin = Mathf.Min(room.bounds.zMin, bounds.zMin);
+            room.bounds.zMax = Mathf.Max(room.bounds.zMax, bounds.zMax);
+        }
+
+        return room;
+    }
+
+    private void PutRoom(string roomName, int originX, int originY)
+    {
+        PutPatch($"Mazes/Rooms/{roomName}", originX, originY);
     }
 
     private void PutChunk(string chunkName, int originX, int originY)
     {
-        GameObject chunkPrefab = Resources.Load<GameObject>($"Maze Generator/Chunks/{chunkName}");
+        PutPatch($"Maze Generator/Chunks/{chunkName}", originX, originY);
+    }
+
+    private void PutPatch(string patchPath, int originX, int originY)
+    {
+        GameObject chunkPrefab = Resources.Load<GameObject>(patchPath);
         if (chunkPrefab == null)
         {
-            Debug.LogAssertion($"Чанк с именем '{chunkName}' не найден.");
+            Debug.LogAssertion($"Патч по пути '{patchPath}' не найден.");
             return;
         }
 
         Grid chunkGrid = chunkPrefab.GetComponent<Grid>();
         if (chunkGrid == null)
         {
-            Debug.LogAssertion($"Чанк с именем '{chunkName}' имеет неправильную структуру.");
+            Debug.LogAssertion($"Патч по пути '{patchPath}' имеет неправильную структуру.");
             return;
         }
 
@@ -97,8 +140,6 @@ public class MazeGenerator : MonoBehaviour
                     layers[i].SetTile(posTarget, tile);
                 }
             }
-
-            Debug.Log($"Обработан слой {i} с границами {bounds}");
         }
     }
 
